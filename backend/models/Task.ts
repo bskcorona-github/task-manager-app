@@ -22,6 +22,7 @@ const TaskSchema = new Schema({
     dueDate: {
         type: Date, // dueDateをDate型で追加
     },
+    tags: [{ type: String }],
     createdAt: {
         type: Date,
         default: Date.now,

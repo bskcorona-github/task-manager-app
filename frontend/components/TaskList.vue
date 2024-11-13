@@ -3,7 +3,7 @@
     <h1>タスク一覧</h1>
 
     <!-- 検索バー -->
-    <input v-model="searchQuery" placeholder="タスクを検索" class="search-bar" />
+    <input v-model="searchQuery" placeholder="タスクを検索またはタグを入力" class="search-bar" />
 
     <!-- フィルタリングボタン -->
     <div class="filter-buttons">
@@ -47,6 +47,7 @@ interface Task {
   priority: 'high' | 'medium' | 'low';
   dueDate?: string;
   createdAt: string;
+  tags: string[]; // タグの追加
 }
 
 export default defineComponent({
@@ -70,16 +71,16 @@ export default defineComponent({
       }
     };
 
-    const addTask = async ({ title, priority, dueDate, description }: { title: string; priority: 'high' | 'medium' | 'low'; dueDate?: string; description?: string }) => {
+    const addTask = async ({ title, priority, dueDate, description, tags }: { title: string; priority: 'high' | 'medium' | 'low'; dueDate?: string; description?: string; tags: string[] }) => {
       try {
-        const response = await $axios.post('/tasks', { title, priority, dueDate, description });
+        const response = await $axios.post('/tasks', { title, priority, dueDate, description, tags });
         tasks.value.push(response.data.data);
       } catch (error) {
         console.error('タスクの追加に失敗しました:', error);
       }
     };
 
-    const updateTask = async (updatedTask: { id: string; title?: string; status?: 'todo' | 'in-progress' | 'done'; priority?: 'high' | 'medium' | 'low'; dueDate?: string; description?: string }) => {
+    const updateTask = async (updatedTask: { id: string; title?: string; status?: 'todo' | 'in-progress' | 'done'; priority?: 'high' | 'medium' | 'low'; dueDate?: string; description?: string; tags?: string[] }) => {
       try {
         await $axios.put(`/tasks?id=${updatedTask.id}`, updatedTask);
         const task = tasks.value.find((task) => task._id === updatedTask.id);
@@ -89,6 +90,7 @@ export default defineComponent({
           if (updatedTask.priority) task.priority = updatedTask.priority;
           if (updatedTask.dueDate) task.dueDate = updatedTask.dueDate;
           if (updatedTask.description) task.description = updatedTask.description;
+          if (updatedTask.tags) task.tags = updatedTask.tags;
         }
       } catch (error) {
         console.error('タスクの更新に失敗しました:', error);
@@ -110,7 +112,7 @@ export default defineComponent({
 
     // フィルタリングと検索のロジック
     const filteredTasks = computed(() => {
-      const filtered = tasks.value.filter((task) => {
+      let filtered = tasks.value.filter((task) => {
         // ステータスフィルタリング
         if (statusFilter.value === 'all') return true;
         if (statusFilter.value === 'incomplete') {
@@ -119,46 +121,42 @@ export default defineComponent({
         return task.status === 'done';
       });
 
-      // 検索フィルタリング
+      // 検索フィルタリング（タグ検索対応）
       if (searchQuery.value) {
-        return filtered.filter((task) => {
-          const query = searchQuery.value.toLowerCase();
-          return (
-            task.title.toLowerCase().includes(query) ||
-            (task.description && task.description.toLowerCase().includes(query))
-          );
-        });
+        const query = searchQuery.value.toLowerCase();
+        filtered = filtered.filter((task) =>
+          task.title.toLowerCase().includes(query) ||
+          (task.description && task.description.toLowerCase().includes(query)) ||
+          task.tags.some(tag => tag.toLowerCase().includes(query)) // タグの一致を確認
+        );
       }
+
       return filtered;
     });
 
     // ソート順の適用
     const sortedTasks = computed(() => {
-  return [...filteredTasks.value].sort((a, b) => {
-    const priorityOrder = { high: 1, medium: 2, low: 3 };
-    
-    if (sortOrder.value === 'priority') {
-      // 優先度順 > 期日 > 作成日
-      const priorityDifference = priorityOrder[a.priority] - priorityOrder[b.priority];
-      if (priorityDifference !== 0) return priorityDifference; // 優先度が異なる場合、優先度でソート
-      const dueDateDifference = new Date(a.dueDate || 0).getTime() - new Date(b.dueDate || 0).getTime();
-      if (dueDateDifference !== 0) return dueDateDifference; // 優先度が同じなら期日でソート
-      return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(); // 優先度と期日が同じなら作成日でソート
-    } else if (sortOrder.value === 'dueDate') {
-      // 期日順 > 優先度 > 作成日
-      const dueDateDifference = new Date(a.dueDate || 0).getTime() - new Date(b.dueDate || 0).getTime();
-      if (dueDateDifference !== 0) return dueDateDifference; // 期日が異なる場合、期日でソート
-      const priorityDifference = priorityOrder[a.priority] - priorityOrder[b.priority];
-      if (priorityDifference !== 0) return priorityDifference; // 期日が同じなら優先度でソート
-      return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(); // 期日と優先度が同じなら作成日でソート
-    } else if (sortOrder.value === 'createdAt') {
-      // 作成日順
-      return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-    }
-    return 0;
-  });
-});
-  
+      return [...filteredTasks.value].sort((a, b) => {
+        const priorityOrder = { high: 1, medium: 2, low: 3 };
+
+        if (sortOrder.value === 'priority') {
+          const priorityDifference = priorityOrder[a.priority] - priorityOrder[b.priority];
+          if (priorityDifference !== 0) return priorityDifference;
+          const dueDateDifference = new Date(a.dueDate || 0).getTime() - new Date(b.dueDate || 0).getTime();
+          if (dueDateDifference !== 0) return dueDateDifference;
+          return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        } else if (sortOrder.value === 'dueDate') {
+          const dueDateDifference = new Date(a.dueDate || 0).getTime() - new Date(b.dueDate || 0).getTime();
+          if (dueDateDifference !== 0) return dueDateDifference;
+          const priorityDifference = priorityOrder[a.priority] - priorityOrder[b.priority];
+          if (priorityDifference !== 0) return priorityDifference;
+          return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        } else if (sortOrder.value === 'createdAt') {
+          return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        }
+        return 0;
+      });
+    });
 
     onMounted(fetchTasks);
 

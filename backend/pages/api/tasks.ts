@@ -5,13 +5,11 @@ import Task from '../../models/Task';
 connectDB();
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-    // CORSヘッダーを追加
     res.setHeader('Access-Control-Allow-Origin', 'http://localhost:3000');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
     if (req.method === 'OPTIONS') {
-        // プリフライトリクエストに対して早期に応答
         res.status(200).end();
         return;
     }
@@ -24,26 +22,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 const tasks = await Task.find({});
                 res.status(200).json({ success: true, data: tasks });
             } catch (error) {
-                console.log(error);
+                console.error("Error fetching tasks:", error);
                 res.status(400).json({ success: false });
             }
             break;
+
             case 'POST':
                 try {
-                    const { title, priority = 'medium', dueDate } = req.body;
+                    const { title, priority = 'medium', dueDate, description, tags } = req.body;
                     const formattedDueDate = dueDate ? new Date(dueDate) : undefined;
-            
-                    console.log("Formatted data for DB:", { title, priority, dueDate: formattedDueDate });
-            
-                    const task = await Task.create({ title, priority, dueDate: formattedDueDate });
+    
+                    // タスク作成時にtagsを含めて保存
+                    const task = await Task.create({ title, priority, dueDate: formattedDueDate, description, tags });
                     res.status(201).json({ success: true, data: task });
+                    console.log(task)
                 } catch (error) {
                     console.log("Error in saving task:", error);
                     res.status(400).json({ success: false });
                 }
                 break;
-            
-            
 
         case 'PUT':
             try {
@@ -57,7 +54,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 }
                 res.status(200).json({ success: true, data: task });
             } catch (error) {
-                console.log(error);
+                console.error("Error updating task:", error);
                 res.status(400).json({ success: false });
             }
             break;
@@ -71,7 +68,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 }
                 res.status(200).json({ success: true, data: {} });
             } catch (error) {
-                console.log(error);
+                console.error("Error deleting task:", error);
                 res.status(400).json({ success: false });
             }
             break;
