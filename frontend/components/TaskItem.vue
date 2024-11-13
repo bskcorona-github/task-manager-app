@@ -26,9 +26,12 @@
         :checked="task.status === 'done'"
         @change="toggleStatus"
       />
-      <span>{{ task.title }}</span>
+      <span :class="{ 'completed-text': task.status === 'done', 'overdue-text': isOverdue }">
+        {{ task.title }}
+      </span>
       <span class="priority" :class="task.priority">{{ priorityLabel }}</span>
-      <span v-if="task.dueDate" class="due-date">期日: {{ formattedDueDate }}</span> <!-- 期日の表示 -->
+      <span :class="['due-date', { 'overdue-text': isOverdue }]">期日: {{ formattedDueDate }}</span>
+      <span class="created-date">作成日: {{ formattedCreatedAt }}</span>
       <button @click.stop="startEdit">編集</button>
       <button @click.stop="deleteTask">削除</button>
     </div>
@@ -47,6 +50,7 @@ export default defineComponent({
         status: 'todo' | 'in-progress' | 'done';
         priority: 'high' | 'medium' | 'low';
         dueDate?: string;
+        createdAt: string;
       },
       required: true,
     },
@@ -55,12 +59,11 @@ export default defineComponent({
   setup(props, { emit }) {
     const isEditing = ref(false);
     const editedTitle = ref(props.task.title);
-    const editedPriority = ref(props.task.priority); // 優先度の編集用
-    const editedDueDate = ref(props.task.dueDate || ''); // 期日編集用
+    const editedPriority = ref(props.task.priority);
+    const editedDueDate = ref(props.task.dueDate || '');
     const editInput = ref<HTMLInputElement | null>(null);
     const taskItem = ref<HTMLElement | null>(null);
 
-    // 日本語の優先度ラベルを取得する computed プロパティ
     const priorityLabel = computed(() => {
       switch (props.task.priority) {
         case 'high':
@@ -74,27 +77,36 @@ export default defineComponent({
       }
     });
 
+    const isOverdue = computed(() => {
+      const currentDate = new Date();
+      const dueDate = props.task.dueDate ? new Date(props.task.dueDate) : null;
+      return dueDate ? dueDate < currentDate && props.task.status !== 'done' : false;
+    });
+
     const taskClass = computed(() => {
       const currentDate = new Date();
       const dueDate = props.task.dueDate ? new Date(props.task.dueDate) : null;
       if (dueDate) {
-        const isOverdue = dueDate < currentDate && props.task.status !== 'done';
         const isNearDue = dueDate.getTime() - currentDate.getTime() <= 3 * 24 * 60 * 60 * 1000; // 3日以内
         return {
-          overdue: isOverdue,
-          'near-due': !isOverdue && isNearDue,
+          overdue: isOverdue.value,
+          'near-due': !isOverdue.value && isNearDue,
         };
       }
       return {};
     });
 
-    // フォーマット済みの期日を取得する computed プロパティ
     const formattedDueDate = computed(() => {
       if (props.task.dueDate) {
         const date = new Date(props.task.dueDate);
-        return date.toLocaleDateString('ja-JP'); // 日本語形式で日付を表示
+        return date.toLocaleDateString('ja-JP');
       }
       return '';
+    });
+
+    const formattedCreatedAt = computed(() => {
+      const date = new Date(props.task.createdAt);
+      return date.toLocaleDateString('ja-JP');
     });
 
     const startEdit = () => {
@@ -132,7 +144,7 @@ export default defineComponent({
 
     const handleClickOutside = (event: MouseEvent) => {
       if (isEditing.value && taskItem.value && !taskItem.value.contains(event.target as Node)) {
-        saveEdit(); // 外部クリック時に保存
+        saveEdit();
       }
     };
 
@@ -158,7 +170,9 @@ export default defineComponent({
       taskItem,
       priorityLabel,
       taskClass,
-      formattedDueDate, // フォーマット済みの日付を表示
+      isOverdue,
+      formattedDueDate,
+      formattedCreatedAt,
     };
   },
 });
@@ -174,9 +188,12 @@ export default defineComponent({
   width: 100%;
   padding: 0.5em;
 }
-.completed span {
+.completed-text {
   text-decoration: line-through;
   color: gray;
+}
+.overdue-text {
+  font-weight: bold;
 }
 .priority.high {
   color: red;
@@ -195,8 +212,12 @@ export default defineComponent({
   background-color: #fff0cc;
   border-left: 5px solid orange;
 }
-.due-date {
+.due-date, .created-date {
   margin-left: 8px;
+  font-size: 0.8em;
+  color: gray;
+}
+.due-date.overdue-text {
   font-weight: bold;
 }
 </style>
